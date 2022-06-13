@@ -28,8 +28,8 @@ import javax.lang.model.element.Modifier;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.aot.generate.GeneratedMethods;
-import org.springframework.aot.hint.ExecutableMode;
 import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsPredicates;
 import org.springframework.aot.test.generator.compile.Compiled;
 import org.springframework.aot.test.generator.compile.TestCompiler;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -37,6 +37,7 @@ import org.springframework.beans.factory.config.BeanReference;
 import org.springframework.beans.factory.config.ConstructorArgumentValues.ValueHolder;
 import org.springframework.beans.factory.config.RuntimeBeanNameReference;
 import org.springframework.beans.factory.config.RuntimeBeanReference;
+import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.ManagedList;
 import org.springframework.beans.factory.support.ManagedMap;
@@ -230,6 +231,13 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 	}
 
 	@Test
+	void setInitMethodWhenSingleInferredInitMethod() {
+		this.beanDefinition.setTargetType(InitDestroyBean.class);
+		this.beanDefinition.setInitMethodName(AbstractBeanDefinition.INFER_METHOD);
+		testCompiledResult((actual, compiled) -> assertThat(actual.getInitMethodNames()).isNull());
+	}
+
+	@Test
 	void setInitMethodWhenMultipleInitMethods() {
 		this.beanDefinition.setTargetType(InitDestroyBean.class);
 		this.beanDefinition.setInitMethodNames("i1", "i2");
@@ -251,6 +259,13 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 	}
 
 	@Test
+	void setDestroyMethodWhenSingleInferredInitMethod() {
+		this.beanDefinition.setTargetType(InitDestroyBean.class);
+		this.beanDefinition.setDestroyMethodName(AbstractBeanDefinition.INFER_METHOD);
+		testCompiledResult((actual, compiled) -> assertThat(actual.getDestroyMethodNames()).isNull());
+	}
+
+	@Test
 	void setDestroyMethodWhenMultipleDestroyMethods() {
 		this.beanDefinition.setTargetType(InitDestroyBean.class);
 		this.beanDefinition.setDestroyMethodNames("d1", "d2");
@@ -262,15 +277,8 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 	}
 
 	private void assertHasMethodInvokeHints(Class<?> beanType, String... methodNames) {
-		assertThat(this.hints.reflection().getTypeHint(beanType)).satisfies(typeHint -> {
-			for (String methodName : methodNames) {
-				assertThat(typeHint.methods()).anySatisfy(methodHint -> {
-					assertThat(methodHint.getName()).isEqualTo(methodName);
-					assertThat(methodHint.getModes())
-							.containsExactly(ExecutableMode.INVOKE);
-				});
-			}
-		});
+		assertThat(methodNames).allMatch(methodName ->
+				RuntimeHintsPredicates.reflection().onMethod(beanType, methodName).invoke().test(this.hints));
 	}
 
 	@Test
@@ -371,7 +379,7 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 	void attributesWhenSomeFiltered() {
 		this.beanDefinition.setAttribute("a", "A");
 		this.beanDefinition.setAttribute("b", "B");
-		Predicate<String> attributeFilter = attribute -> "a".equals(attribute);
+		Predicate<String> attributeFilter = "a"::equals;
 		this.generator = new BeanDefinitionPropertiesCodeGenerator(this.hints,
 				attributeFilter, this.generatedMethods, (name, value) -> null);
 		testCompiledResult(this.beanDefinition, (actual, compiled) -> {

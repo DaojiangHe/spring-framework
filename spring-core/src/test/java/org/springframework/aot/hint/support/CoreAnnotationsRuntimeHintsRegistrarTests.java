@@ -14,26 +14,28 @@
  * limitations under the License.
  */
 
-package org.springframework.core.io.support;
+package org.springframework.aot.hint.support;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsPredicates;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
-import org.springframework.aot.hint.TypeHint;
-import org.springframework.aot.hint.TypeReference;
+import org.springframework.core.annotation.AliasFor;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.io.support.SpringFactoriesLoader;
 import org.springframework.util.ClassUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for {@link SpringFactoriesLoaderRuntimeHintsRegistrar}.
+ * Tests for {@link CoreAnnotationsRuntimeHintsRegistrar}.
  *
  * @author Phillip Webb
  */
-class SpringFactoriesLoaderRuntimeHintsRegistrarTests {
+class CoreAnnotationsRuntimeHintsRegistrarTests {
 
 	private RuntimeHints hints;
 
@@ -46,29 +48,15 @@ class SpringFactoriesLoaderRuntimeHintsRegistrarTests {
 	}
 
 	@Test
-	void resourceLocationHasHints() {
-		assertThat(this.hints.resources().resourcePatterns())
-				.anySatisfy(hint -> assertThat(hint.getIncludes())
-						.contains(SpringFactoriesLoader.FACTORIES_RESOURCE_LOCATION));
+	void aliasForHasHints() {
+		assertThat(RuntimeHintsPredicates.reflection().onType(AliasFor.class)
+				.withMemberCategory(MemberCategory.INVOKE_DECLARED_METHODS)).accepts(this.hints);
 	}
 
 	@Test
-	void factoryTypeHasHint() {
-		TypeReference type = TypeReference.of(DummyFactory.class);
-		assertThat(this.hints.reflection().getTypeHint(type))
-				.satisfies(this::expectedHints);
-	}
-
-	@Test
-	void factoryImplementationHasHint() {
-		TypeReference type = TypeReference.of(MyDummyFactory1.class);
-		assertThat(this.hints.reflection().getTypeHint(type))
-				.satisfies(this::expectedHints);
-	}
-
-	private void expectedHints(TypeHint hint) {
-		assertThat(hint.getMemberCategories())
-				.containsExactly(MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
+	void orderAnnotationHasHints() {
+		assertThat(RuntimeHintsPredicates.reflection().onType(Order.class)
+				.withMemberCategory(MemberCategory.INVOKE_DECLARED_METHODS)).accepts(this.hints);
 	}
 
 }
