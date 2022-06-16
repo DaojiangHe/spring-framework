@@ -14,22 +14,23 @@
  * limitations under the License.
  */
 
-package org.springframework.core.annotation
+package org.springframework.http;
+
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.lang.Nullable;
 
 /**
- * @author Sam Brannen
- * @since 5.3.16
+ * {@link RuntimeHintsRegistrar} implementation that makes sure mime types
+ * are available in constrained environments.
+ *
+ * @author Stephane Nicoll
+ * @since 6.0
  */
-@Target(AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-public annotation class SynthesizablePerson(
+class MediaTypeResourceHintsRegistrar implements RuntimeHintsRegistrar {
 
-	@get:AliasFor("name")
-	val value: String = "",
-
-	@get:AliasFor("value")
-	val name: String = "",
-
-	vararg val friends: SynthesizablePerson = []
-
-)
+	@Override
+	public void registerHints(RuntimeHints hints, @Nullable ClassLoader classLoader) {
+		hints.resources().registerPattern("org/springframework/http/mime.types");
+	}
+}

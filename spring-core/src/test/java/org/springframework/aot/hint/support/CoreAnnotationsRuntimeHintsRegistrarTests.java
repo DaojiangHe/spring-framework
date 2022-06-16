@@ -37,11 +37,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class CoreAnnotationsRuntimeHintsRegistrarTests {
 
-	private RuntimeHints hints;
+	private RuntimeHints hints = new RuntimeHints();
 
 	@BeforeEach
 	void setup() {
-		this.hints = new RuntimeHints();
 		SpringFactoriesLoader.forResourceLocation("META-INF/spring/aot.factories")
 				.load(RuntimeHintsRegistrar.class).forEach(registrar -> registrar
 						.registerHints(this.hints, ClassUtils.getDefaultClassLoader()));
