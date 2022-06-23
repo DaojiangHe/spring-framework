@@ -22,7 +22,6 @@ import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -34,10 +33,10 @@ import org.springframework.aot.hint.ExecutableHint;
 import org.springframework.aot.hint.ExecutableMode;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.ReflectionHints;
-import org.springframework.aot.hint.TypeHint.Builder;
 import org.springframework.core.KotlinDetector;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ResolvableType;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ClassUtils;
 
 /**
@@ -65,16 +64,9 @@ public class BindingReflectionHintsRegistrar {
 	 * @param types the types to bind
 	 */
 	public void registerReflectionHints(ReflectionHints hints, Type... types) {
+		Set<Type> seen = new LinkedHashSet<>();
 		for (Type type : types) {
-			Set<Class<?>> referencedTypes = new LinkedHashSet<>();
-			collectReferencedTypes(new HashSet<>(), referencedTypes, type);
-			for (Class<?> referencedType : referencedTypes) {
-				hints.registerType(referencedType, builder -> {
-					if (shouldRegisterMembers(referencedType)) {
-						registerMembers(hints, referencedType, builder);
-					}
-				});
-			}
+			registerReflectionHints(hints, seen, type);
 		}
 	}
 
@@ -84,47 +76,70 @@ public class BindingReflectionHintsRegistrar {
 	 * @return {@code true} if the members of the type should be registered transitively
 	 */
 	protected boolean shouldRegisterMembers(Class<?> type) {
-		return !type.getCanonicalName().startsWith("java.");
+		return !type.getCanonicalName().startsWith("java.") && !type.isArray();
 	}
 
-	private void registerMembers(ReflectionHints hints, Class<?> type, Builder builder) {
-		builder.withMembers(MemberCategory.DECLARED_FIELDS,
-				MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
-		try {
-			BeanInfo beanInfo = Introspector.getBeanInfo(type);
-			PropertyDescriptor[] propertyDescriptors = beanInfo.getPropertyDescriptors();
-			for (PropertyDescriptor propertyDescriptor : propertyDescriptors) {
-				Method writeMethod = propertyDescriptor.getWriteMethod();
-				if (writeMethod != null && writeMethod.getDeclaringClass() != Object.class) {
-					hints.registerMethod(writeMethod, INVOKE);
-					MethodParameter methodParameter = MethodParameter.forExecutable(writeMethod, 0);
-					registerReflectionHints(hints, methodParameter.getGenericParameterType());
-				}
-				Method readMethod = propertyDescriptor.getReadMethod();
-				if (readMethod != null && readMethod.getDeclaringClass() != Object.class) {
-					hints.registerMethod(readMethod, INVOKE);
-					MethodParameter methodParameter = MethodParameter.forExecutable(readMethod, -1);
-					registerReflectionHints(hints, methodParameter.getGenericParameterType());
-				}
+	private void registerReflectionHints(ReflectionHints hints, Set<Type> seen, Type type) {
+		if (type instanceof Class<?> clazz) {
+			if (clazz.isPrimitive() || clazz == Object.class) {
+				return;
 			}
-			String companionClassName = type.getCanonicalName() + KOTLIN_COMPANION_SUFFIX;
-			if (KotlinDetector.isKotlinType(type) && ClassUtils.isPresent(companionClassName, null)) {
-				Class<?> companionClass = ClassUtils.resolveClassName(companionClassName, null);
-				Method serializerMethod = ClassUtils.getMethodIfAvailable(companionClass, "serializer");
-				if (serializerMethod != null) {
-					hints.registerMethod(serializerMethod);
+			hints.registerType(clazz, builder -> {
+				if (seen.contains(type)) {
+					return;
 				}
-			}
+				seen.add(type);
+				if (shouldRegisterMembers(clazz)) {
+					builder.withMembers(
+							MemberCategory.DECLARED_FIELDS,
+							MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
+					try {
+						BeanInfo beanInfo = Introspector.getBeanInfo(clazz);
+						PropertyDescriptor[] propertyDescriptors = beanInfo.getPropertyDescriptors();
+						for (PropertyDescriptor propertyDescriptor : propertyDescriptors) {
+							Method writeMethod = propertyDescriptor.getWriteMethod();
+							if (writeMethod != null && writeMethod.getDeclaringClass() != Object.class) {
+								hints.registerMethod(writeMethod, INVOKE);
+								MethodParameter methodParameter = MethodParameter.forExecutable(writeMethod, 0);
+								Type methodParameterType = methodParameter.getGenericParameterType();
+								if (!seen.contains(methodParameterType)) {
+									registerReflectionHints(hints, seen, methodParameterType);
+								}
+							}
+							Method readMethod = propertyDescriptor.getReadMethod();
+							if (readMethod != null && readMethod.getDeclaringClass() != Object.class) {
+								hints.registerMethod(readMethod, INVOKE);
+								MethodParameter methodParameter = MethodParameter.forExecutable(readMethod, -1);
+								Type methodParameterType = methodParameter.getGenericParameterType();
+								if (!seen.contains(methodParameterType)) {
+									registerReflectionHints(hints, seen, methodParameterType);
+								}
+							}
+						}
+						String companionClassName = clazz.getCanonicalName() + KOTLIN_COMPANION_SUFFIX;
+						if (KotlinDetector.isKotlinType(clazz) && ClassUtils.isPresent(companionClassName, null)) {
+							Class<?> companionClass = ClassUtils.resolveClassName(companionClassName, null);
+							Method serializerMethod = ClassUtils.getMethodIfAvailable(companionClass, "serializer");
+							if (serializerMethod != null) {
+								hints.registerMethod(serializerMethod);
+							}
+						}
+					}
+					catch (IntrospectionException ex) {
+						if (logger.isDebugEnabled()) {
+							logger.debug("Ignoring referenced type [" + clazz.getName() + "]: " + ex.getMessage());
+						}
+					}
+				}
+			});
 		}
-		catch (IntrospectionException ex) {
-			if (logger.isDebugEnabled()) {
-				logger.debug("Ignoring referenced type [" + type.getName() + "]: " + ex.getMessage());
-			}
-		}
+		Set<Class<?>> referencedTypes = new LinkedHashSet<>();
+		collectReferencedTypes(seen, referencedTypes, type);
+		referencedTypes.forEach(referencedType -> registerReflectionHints(hints, seen, referencedType));
 	}
 
-	private void collectReferencedTypes(Set<Type> seen, Set<Class<?>> types, Type type) {
-		if (seen.contains(type)) {
+	private void collectReferencedTypes(Set<Type> seen, Set<Class<?>> types, @Nullable Type type) {
+		if (type == null || seen.contains(type)) {
 			return;
 		}
 		seen.add(type);
@@ -137,4 +152,5 @@ public class BindingReflectionHintsRegistrar {
 			}
 		}
 	}
+
 }

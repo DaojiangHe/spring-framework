@@ -29,11 +29,10 @@ import javax.lang.model.element.Modifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.aot.generate.ClassNameGenerator;
 import org.springframework.aot.generate.DefaultGenerationContext;
-import org.springframework.aot.generate.GeneratedMethods;
 import org.springframework.aot.generate.GenerationContext;
 import org.springframework.aot.generate.InMemoryGeneratedFiles;
-import org.springframework.aot.generate.MethodGenerator;
 import org.springframework.aot.generate.MethodReference;
 import org.springframework.aot.test.generator.compile.Compiled;
 import org.springframework.aot.test.generator.compile.TestCompiler;
@@ -42,7 +41,10 @@ import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.RegisteredBean;
 import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.beans.testfixture.beans.TestBean;
+import org.springframework.beans.testfixture.beans.factory.aot.MockBeanFactoryInitializationCode;
 import org.springframework.core.mock.MockSpringFactoriesLoader;
+import org.springframework.core.testfixture.aot.generate.TestGenerationContext;
+import org.springframework.core.testfixture.aot.generate.TestTarget;
 import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.JavaFile;
 import org.springframework.javapoet.MethodSpec;
@@ -73,7 +75,7 @@ class BeanRegistrationsAotContributionTests {
 	@BeforeEach
 	void setup() {
 		this.generatedFiles = new InMemoryGeneratedFiles();
-		this.generationContext = new DefaultGenerationContext(this.generatedFiles);
+		this.generationContext = new TestGenerationContext(this.generatedFiles);
 		this.beanFactory = new DefaultListableBeanFactory();
 		this.springFactoriesLoader = new MockSpringFactoriesLoader();
 		this.methodGeneratorFactory = new BeanDefinitionMethodGeneratorFactory(
@@ -101,7 +103,9 @@ class BeanRegistrationsAotContributionTests {
 
 	@Test
 	void applyToWhenHasNameGeneratesPrefixedFeatureName() {
-		this.beanFactoryInitializationCode = new MockBeanFactoryInitializationCode("Management");
+		this.generationContext = new DefaultGenerationContext(
+				new ClassNameGenerator(TestTarget.class, "Management"), this.generatedFiles);
+		this.beanFactoryInitializationCode = new MockBeanFactoryInitializationCode();
 		Map<String, BeanDefinitionMethodGenerator> registrations = new LinkedHashMap<>();
 		RegisteredBean registeredBean = registerBean(
 				new RootBeanDefinition(TestBean.class));
@@ -130,11 +134,11 @@ class BeanRegistrationsAotContributionTests {
 
 			@Override
 			MethodReference generateBeanDefinitionMethod(
-					GenerationContext generationContext, String featureNamePrefix,
+					GenerationContext generationContext,
 					BeanRegistrationsCode beanRegistrationsCode) {
 				beanRegistrationsCodes.add(beanRegistrationsCode);
 				return super.generateBeanDefinitionMethod(generationContext,
-						featureNamePrefix, beanRegistrationsCode);
+						beanRegistrationsCode);
 			}
 
 		};
@@ -164,7 +168,7 @@ class BeanRegistrationsAotContributionTests {
 	}
 
 	private JavaFile createJavaFile() {
-		MethodReference initializer = this.beanFactoryInitializationCode.initializers
+		MethodReference initializer = this.beanFactoryInitializationCode.getInitializers()
 				.get(0);
 		TypeSpec.Builder builder = TypeSpec.classBuilder("BeanFactoryConsumer");
 		builder.addModifiers(Modifier.PUBLIC);
@@ -175,39 +179,6 @@ class BeanRegistrationsAotContributionTests {
 				.addStatement(initializer.toInvokeCodeBlock(CodeBlock.of("beanFactory")))
 				.build());
 		return JavaFile.builder("__", builder.build()).build();
-	}
-
-	class MockBeanFactoryInitializationCode implements BeanFactoryInitializationCode {
-
-		private final GeneratedMethods generatedMethods = new GeneratedMethods();
-
-		private final List<MethodReference> initializers = new ArrayList<>();
-
-		private final String name;
-
-		MockBeanFactoryInitializationCode() {
-			this("");
-		}
-
-		MockBeanFactoryInitializationCode(String name) {
-			this.name = name;
-		}
-
-		@Override
-		public String getName() {
-			return this.name;
-		}
-
-		@Override
-		public MethodGenerator getMethodGenerator() {
-			return this.generatedMethods;
-		}
-
-		@Override
-		public void addInitializer(MethodReference methodReference) {
-			this.initializers.add(methodReference);
-		}
-
 	}
 
 }
