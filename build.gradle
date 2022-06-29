@@ -2,7 +2,7 @@ plugins {
 	id 'io.spring.dependency-management' version '1.0.11.RELEASE' apply false
 	id 'io.spring.nohttp' version '0.0.10'
 	id "io.freefair.aspectj" version '6.4.0' apply false
-	id 'org.jetbrains.dokka' version '1.6.10' apply false
+	id 'org.jetbrains.dokka' version '1.7.0' apply false
 	id 'org.jetbrains.kotlin.jvm' version '1.7.0' apply false
 	id "org.jetbrains.kotlin.plugin.serialization" version '1.7.0' apply false
 	id 'org.asciidoctor.jvm.convert' version '3.3.2'
@@ -240,6 +240,8 @@ configure(allprojects) { project ->
 			dependency "org.glassfish:jakarta.el:4.0.2"
 			dependency "org.glassfish.tyrus:tyrus-container-servlet:2.0.1"
 			dependency "org.eclipse.persistence:org.eclipse.persistence.jpa:3.0.2"
+
+			dependency "org.graalvm.nativeimage:svm:22.1.0.1"
 		}
 		generatedPomCustomization {
 			enabled = false
