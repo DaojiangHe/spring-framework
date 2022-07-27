@@ -25,9 +25,7 @@ import javax.lang.model.element.Modifier;
 import org.assertj.core.api.ThrowingConsumer;
 import org.junit.jupiter.api.Test;
 
-import org.springframework.aot.generate.DefaultGenerationContext;
 import org.springframework.aot.generate.GeneratedClass;
-import org.springframework.aot.generate.InMemoryGeneratedFiles;
 import org.springframework.aot.hint.ExecutableHint;
 import org.springframework.aot.hint.ExecutableMode;
 import org.springframework.aot.hint.ReflectionHints;
@@ -68,16 +66,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class InstanceSupplierCodeGeneratorTests {
 
-	private final InMemoryGeneratedFiles generatedFiles;
-
-	private final DefaultGenerationContext generationContext;
-
-	private boolean allowDirectSupplierShortcut = false;
+	private final TestGenerationContext generationContext;
 
 
 	InstanceSupplierCodeGeneratorTests() {
-		this.generatedFiles = new InMemoryGeneratedFiles();
-		this.generationContext = new TestGenerationContext(this.generatedFiles);
+		this.generationContext = new TestGenerationContext();
 	}
 
 
@@ -172,7 +165,7 @@ class InstanceSupplierCodeGeneratorTests {
 					instanceSupplier);
 			assertThat(bean).isInstanceOf(TestBeanWithPrivateConstructor.class);
 			assertThat(compiled.getSourceFile())
-					.contains("return BeanInstanceSupplier.forConstructor();");
+					.contains("return BeanInstanceSupplier.<TestBeanWithPrivateConstructor>forConstructor();");
 		});
 		assertThat(getReflectionHints().getTypeHint(TestBeanWithPrivateConstructor.class))
 				.satisfies(hasConstructorWithMode(ExecutableMode.INVOKE));
@@ -211,7 +204,7 @@ class InstanceSupplierCodeGeneratorTests {
 			assertThat(bean).isInstanceOf(String.class);
 			assertThat(bean).isEqualTo("Hello");
 			assertThat(compiled.getSourceFile())
-					.contains("BeanInstanceSupplier.forFactoryMethod")
+					.contains("forFactoryMethod")
 					.doesNotContain("withGenerator");
 		});
 		assertThat(getReflectionHints().getTypeHint(SimpleConfiguration.class))
@@ -302,7 +295,6 @@ class InstanceSupplierCodeGeneratorTests {
 		return (T) beanFactory.getBean("testBean");
 	}
 
-	@SuppressWarnings("unchecked")
 	private void compile(DefaultListableBeanFactory beanFactory,
 			BeanDefinition beanDefinition,
 			BiConsumer<InstanceSupplier<?>, Compiled> result) {
@@ -313,8 +305,9 @@ class InstanceSupplierCodeGeneratorTests {
 		GeneratedClass generateClass = this.generationContext.getGeneratedClasses().addForFeature("TestCode", typeBuilder);
 		InstanceSupplierCodeGenerator generator = new InstanceSupplierCodeGenerator(
 				this.generationContext, generateClass.getName(),
-				generateClass.getMethods(), this.allowDirectSupplierShortcut);
+				generateClass.getMethods(), false);
 		Executable constructorOrFactoryMethod = ConstructorOrFactoryMethodResolver.resolve(registeredBean);
+		assertThat(constructorOrFactoryMethod).isNotNull();
 		CodeBlock generatedCode = generator.generateCode(registeredBean, constructorOrFactoryMethod);
 		typeBuilder.set(type -> {
 			type.addModifiers(Modifier.PUBLIC);
@@ -325,8 +318,8 @@ class InstanceSupplierCodeGeneratorTests {
 					.addStatement("return $L", generatedCode).build());
 		});
 		this.generationContext.writeGeneratedContent();
-		TestCompiler.forSystem().withFiles(this.generatedFiles).compile(compiled ->
-			result.accept((InstanceSupplier<?>) compiled.getInstance(Supplier.class).get(), compiled));
+		TestCompiler.forSystem().withFiles(this.generationContext.getGeneratedFiles()).compile(compiled ->
+				result.accept((InstanceSupplier<?>) compiled.getInstance(Supplier.class).get(), compiled));
 	}
 
 }

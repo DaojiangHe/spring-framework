@@ -17,9 +17,14 @@
 package org.springframework.beans.factory.aot;
 
 /**
- * An empty test bean used by code generation.
+ * A {@link GenericFactoryBean} that has a bound for the target type.
  *
  * @author Stephane Nicoll
  */
-public class TestBean {
+public class NumberFactoryBean<T extends Number> extends GenericFactoryBean<T> {
+
+	public NumberFactoryBean(Class<T> beanType) {
+		super(beanType);
+	}
+
 }
