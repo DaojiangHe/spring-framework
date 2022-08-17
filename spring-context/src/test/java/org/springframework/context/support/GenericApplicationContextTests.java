@@ -410,6 +410,19 @@ class GenericApplicationContextTests {
 	}
 
 	@Test
+	void refreshForAotFreezeConfiguration() {
+		GenericApplicationContext context = new GenericApplicationContext();
+		context.registerBeanDefinition("test", new RootBeanDefinition(String.class));
+		MergedBeanDefinitionPostProcessor bpp = registerMockMergedBeanDefinitionPostProcessor(context);
+		context.refreshForAotProcessing();
+		RootBeanDefinition mergedBeanDefinition = getBeanDefinition(context, "test");
+		verify(bpp).postProcessMergedBeanDefinition(mergedBeanDefinition, String.class, "test");
+		context.getBeanFactory().clearMetadataCache();
+		assertThat(context.getBeanFactory().getMergedBeanDefinition("test")).isSameAs(mergedBeanDefinition);
+		context.close();
+	}
+
+	@Test
 	void refreshForAotInvokesBeanPostProcessorContractOnMergedBeanDefinitionPostProcessors() {
 		MergedBeanDefinitionPostProcessor bpp = new MergedBeanDefinitionPostProcessor() {
 			@Override
@@ -433,6 +446,7 @@ class GenericApplicationContextTests {
 		assertThat(context.getBeanFactory().getMergedBeanDefinition("test")
 				.hasAttribute("mbdppCalled")).isTrue();
 		assertThat(context.getBean("test")).isEqualTo("42");
+		context.close();
 	}
 
 	@Test

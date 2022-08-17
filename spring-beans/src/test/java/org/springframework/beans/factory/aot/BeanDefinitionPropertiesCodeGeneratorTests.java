@@ -31,12 +31,12 @@ import org.springframework.aot.generate.GeneratedClass;
 import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
 import org.springframework.aot.test.generator.compile.Compiled;
 import org.springframework.aot.test.generator.compile.TestCompiler;
+import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanReference;
 import org.springframework.beans.factory.config.ConstructorArgumentValues.ValueHolder;
 import org.springframework.beans.factory.config.RuntimeBeanNameReference;
 import org.springframework.beans.factory.config.RuntimeBeanReference;
-import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.ManagedList;
 import org.springframework.beans.factory.support.ManagedMap;
@@ -47,6 +47,7 @@ import org.springframework.core.testfixture.aot.generate.TestGenerationContext;
 import org.springframework.javapoet.CodeBlock;
 import org.springframework.javapoet.MethodSpec;
 import org.springframework.javapoet.ParameterizedTypeName;
+import org.springframework.lang.Nullable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -225,9 +226,8 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 	}
 
 	@Test
-	void setInitMethodWhenSingleInferredInitMethod() {
+	void setInitMethodWhenNoInitMethod() {
 		this.beanDefinition.setTargetType(InitDestroyBean.class);
-		this.beanDefinition.setInitMethodName(AbstractBeanDefinition.INFER_METHOD);
 		compile((actual, compiled) -> assertThat(actual.getInitMethodNames()).isNull());
 	}
 
@@ -242,13 +242,6 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 	}
 
 	@Test
-	void setInitMethodWithInferredMethodFirst() {
-		this.beanDefinition.setInitMethodNames(AbstractBeanDefinition.INFER_METHOD, "init");
-		compile((actual, compiled) -> assertThat(compiled.getSourceFile().getContent())
-				.contains("beanDefinition.setInitMethodNames(\"init\");"));
-	}
-
-	@Test
 	void setDestroyMethodWhenDestroyInitMethod() {
 		this.beanDefinition.setTargetType(InitDestroyBean.class);
 		this.beanDefinition.setDestroyMethodName("d1");
@@ -260,9 +253,8 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 	}
 
 	@Test
-	void setDestroyMethodWhenSingleInferredInitMethod() {
+	void setDestroyMethodWhenNoDestroyMethod() {
 		this.beanDefinition.setTargetType(InitDestroyBean.class);
-		this.beanDefinition.setDestroyMethodName(AbstractBeanDefinition.INFER_METHOD);
 		compile((actual, compiled) -> assertThat(actual.getDestroyMethodNames()).isNull());
 	}
 
@@ -275,13 +267,6 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 						.containsExactly("d1", "d2"));
 		String[] methodNames = { "d1", "d2" };
 		assertHasMethodInvokeHints(InitDestroyBean.class, methodNames);
-	}
-
-	@Test
-	void setDestroyMethodWithInferredMethodFirst() {
-		this.beanDefinition.setDestroyMethodNames(AbstractBeanDefinition.INFER_METHOD, "destroy");
-		compile((actual, compiled) -> assertThat(compiled.getSourceFile().getContent())
-				.contains("beanDefinition.setDestroyMethodNames(\"destroy\");"));
 	}
 
 	private void assertHasMethodInvokeHints(Class<?> beanType, String... methodNames) {
@@ -368,6 +353,20 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 			assertThat(value).isInstanceOf(ManagedMap.class);
 			assertThat(((Map<?, ?>) value).get("test")).isInstanceOf(BeanReference.class);
 		});
+	}
+
+	@Test
+	void propertyValuesWhenValuesOnFactoryBeanClass() {
+		this.beanDefinition.setTargetType(String.class);
+		this.beanDefinition.setBeanClass(PropertyValuesFactoryBean.class);
+		this.beanDefinition.getPropertyValues().add("prefix", "Hello");
+		this.beanDefinition.getPropertyValues().add("name", "World");
+		compile((actual, compiled) -> {
+			assertThat(actual.getPropertyValues().get("prefix")).isEqualTo("Hello");
+			assertThat(actual.getPropertyValues().get("name")).isEqualTo("World");
+		});
+		String[] methodNames = { "setPrefix", "setName" };
+		assertHasMethodInvokeHints(PropertyValuesFactoryBean.class, methodNames);
 	}
 
 	@Test
@@ -473,6 +472,42 @@ class BeanDefinitionPropertiesCodeGeneratorTests {
 
 		public void setSpring(String spring) {
 			this.spring = spring;
+		}
+
+	}
+
+	static class PropertyValuesFactoryBean implements FactoryBean<String> {
+
+		private Class<?> prefix;
+
+		private String name;
+
+		public Class<?> getPrefix() {
+			return this.prefix;
+		}
+
+		public void setPrefix(Class<?> prefix) {
+			this.prefix = prefix;
+		}
+
+		public String getName() {
+			return this.name;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
+
+		@Nullable
+		@Override
+		public String getObject() throws Exception {
+			return getPrefix() + " " + getName();
+		}
+
+		@Nullable
+		@Override
+		public Class<?> getObjectType() {
+			return String.class;
 		}
 
 	}

@@ -320,7 +320,7 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 * Specify a generics-containing target type of this bean definition, if known in advance.
 	 * @since 4.3.3
 	 */
-	public void setTargetType(ResolvableType targetType) {
+	public void setTargetType(@Nullable ResolvableType targetType) {
 		this.targetType = targetType;
 	}
 
@@ -432,8 +432,8 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	@Override
 	public void setInstanceSupplier(@Nullable Supplier<?> instanceSupplier) {
 		super.setInstanceSupplier(instanceSupplier);
-		Method factoryMethod = (instanceSupplier instanceof InstanceSupplier<?>)
-				? ((InstanceSupplier<?>) instanceSupplier).getFactoryMethod() : null;
+		Method factoryMethod = (instanceSupplier instanceof InstanceSupplier<?> ?
+				((InstanceSupplier<?>) instanceSupplier).getFactoryMethod() : null);
 		if (factoryMethod != null) {
 			setResolvedFactoryMethod(factoryMethod);
 		}
@@ -548,6 +548,15 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 					Collections.unmodifiableSet(new LinkedHashSet<>(this.externallyManagedInitMethods)) :
 					Collections.emptySet());
 		}
+	}
+
+	/**
+	 * Resolve the inferred destroy method if necessary.
+	 * @since 6.0
+	 */
+	public void resolveDestroyMethodIfNecessary() {
+		setDestroyMethodNames(DisposableBeanAdapter
+				.inferDestroyMethodsIfNecessary(getResolvableType().toClass(), this));
 	}
 
 	/**
