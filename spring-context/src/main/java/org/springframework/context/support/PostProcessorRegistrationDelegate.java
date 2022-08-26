@@ -426,6 +426,7 @@ final class PostProcessorRegistrationDelegate {
 		}
 	}
 
+
 	private static final class MergedBeanDefinitionPostProcessorInvoker {
 
 		private final DefaultListableBeanFactory beanFactory;
@@ -441,12 +442,14 @@ final class PostProcessorRegistrationDelegate {
 				RootBeanDefinition bd = (RootBeanDefinition) this.beanFactory.getMergedBeanDefinition(beanName);
 				Class<?> beanType = resolveBeanType(bd);
 				postProcessRootBeanDefinition(postProcessors, beanName, beanType, bd);
+				bd.markAsPostProcessed();
 			}
 			registerBeanPostProcessors(this.beanFactory, postProcessors);
 		}
 
 		private void postProcessRootBeanDefinition(List<MergedBeanDefinitionPostProcessor> postProcessors,
 				String beanName, Class<?> beanType, RootBeanDefinition bd) {
+
 			BeanDefinitionValueResolver valueResolver = new BeanDefinitionValueResolver(this.beanFactory, beanName, bd);
 			postProcessors.forEach(postProcessor -> postProcessor.postProcessMergedBeanDefinition(bd, beanType, beanName));
 			for (PropertyValue propertyValue : bd.getPropertyValues().getPropertyValueList()) {
@@ -469,6 +472,7 @@ final class PostProcessorRegistrationDelegate {
 
 		private void resolveInnerBeanDefinition(BeanDefinitionValueResolver valueResolver, BeanDefinition innerBeanDefinition,
 				BiConsumer<String, RootBeanDefinition> resolver) {
+
 			valueResolver.resolveInnerBean(null, innerBeanDefinition, (name, rbd) -> {
 				resolver.accept(name, rbd);
 				return Void.class;
