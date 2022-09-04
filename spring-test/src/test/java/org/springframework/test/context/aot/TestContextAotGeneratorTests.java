@@ -59,13 +59,15 @@ import static org.springframework.aot.hint.MemberCategory.INVOKE_DECLARED_METHOD
 import static org.springframework.aot.hint.MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS;
 import static org.springframework.aot.hint.MemberCategory.INVOKE_PUBLIC_METHODS;
 import static org.springframework.aot.hint.predicate.RuntimeHintsPredicates.reflection;
+import static org.springframework.aot.hint.predicate.RuntimeHintsPredicates.resource;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
 /**
- * Tests for {@link TestContextAotGenerator}.
+ * Tests for {@link TestContextAotGenerator}, {@link AotTestMappings},
+ * {@link AotContextLoader}, and run-time hints.
  *
  * @author Sam Brannen
  * @since 6.0
@@ -74,7 +76,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppC
 class TestContextAotGeneratorTests extends AbstractAotTests {
 
 	/**
-	 * @see AotSmokeTests#scanClassPathThenGenerateSourceFilesAndCompileThem()
+	 * @see AotIntegrationTests#endToEndTests()
 	 */
 	@Test
 	void processAheadOfTimeAndGenerateAotTestMappings() {
@@ -84,6 +86,7 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 				BasicSpringJupiterTests.NestedTests.class,
 				BasicSpringTestNGTests.class,
 				BasicSpringVintageTests.class,
+				XmlSpringJupiterTests.class,
 				WebSpringJupiterTests.class);
 
 		InMemoryGeneratedFiles generatedFiles = new InMemoryGeneratedFiles();
@@ -124,9 +127,6 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 		).forEach(type -> assertReflectionRegistered(runtimeHints, type, INVOKE_PUBLIC_CONSTRUCTORS));
 
 		Stream.of(
-			org.springframework.test.context.aot.samples.basic.BasicSpringVintageTests.CustomXmlBootstrapper.class,
-			org.springframework.test.context.aot.samples.basic.BasicSpringTestNGTests.CustomInitializer.class,
-			org.springframework.test.context.support.AnnotationConfigContextLoader.class,
 			org.springframework.test.context.support.DefaultTestContextBootstrapper.class,
 			org.springframework.test.context.support.DelegatingSmartContextLoader.class,
 			org.springframework.test.context.support.GenericGroovyXmlContextLoader.class,
@@ -141,6 +141,7 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 
 		// TestExecutionListener
 		Stream.of(
+			// @TestExecutionListeners
 			org.springframework.test.context.aot.samples.basic.BasicSpringJupiterTests.DummyTestExecutionListener.class,
 			org.springframework.test.context.event.ApplicationEventsTestExecutionListener.class,
 			org.springframework.test.context.event.EventPublishingTestExecutionListener.class,
@@ -157,6 +158,19 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 			"org.springframework.test.context.support.DynamicPropertiesContextCustomizerFactory",
 			"org.springframework.test.context.web.socket.MockServerContainerContextCustomizerFactory"
 		).forEach(type -> assertReflectionRegistered(runtimeHints, type, INVOKE_DECLARED_CONSTRUCTORS));
+
+		Stream.of(
+			// @BootstrapWith
+			org.springframework.test.context.aot.samples.basic.BasicSpringVintageTests.CustomXmlBootstrapper.class,
+			// @ContextConfiguration(initializers=...)
+			org.springframework.test.context.aot.samples.basic.BasicSpringTestNGTests.CustomInitializer.class,
+			// @ContextConfiguration(loader=...)
+			org.springframework.test.context.support.AnnotationConfigContextLoader.class
+		).forEach(type -> assertReflectionRegistered(runtimeHints, type, INVOKE_DECLARED_CONSTRUCTORS));
+
+		// @ContextConfiguration(locations=...)
+		assertThat(resource().forResource("/org/springframework/test/context/aot/samples/xml/test-config.xml"))
+			.accepts(runtimeHints);
 	}
 
 	private static void assertReflectionRegistered(RuntimeHints runtimeHints, String type, MemberCategory memberCategory) {
@@ -312,7 +326,13 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 			"org/springframework/test/context/aot/samples/web/WebTestConfiguration__TestContext005_BeanDefinitions.java",
 			"org/springframework/web/reactive/config/DelegatingWebFluxConfiguration__TestContext005_Autowiring.java",
 			"org/springframework/web/reactive/config/DelegatingWebFluxConfiguration__TestContext005_BeanDefinitions.java",
-			"org/springframework/web/reactive/config/WebFluxConfigurationSupport__TestContext005_BeanDefinitions.java"
+			"org/springframework/web/reactive/config/WebFluxConfigurationSupport__TestContext005_BeanDefinitions.java",
+			// XmlSpringJupiterTests
+			"org/springframework/context/event/DefaultEventListenerFactory__TestContext006_BeanDefinitions.java",
+			"org/springframework/context/event/EventListenerMethodProcessor__TestContext006_BeanDefinitions.java",
+			"org/springframework/test/context/aot/samples/common/DefaultMessageService__TestContext006_BeanDefinitions.java",
+			"org/springframework/test/context/aot/samples/xml/XmlSpringJupiterTests__TestContext006_ApplicationContextInitializer.java",
+			"org/springframework/test/context/aot/samples/xml/XmlSpringJupiterTests__TestContext006_BeanFactoryRegistrations.java"
 		};
 
 }
