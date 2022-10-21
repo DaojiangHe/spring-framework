@@ -60,9 +60,11 @@ class NamedValueArgumentResolverTests {
 
 
 	@BeforeEach
+	@SuppressWarnings("deprecation")
 	void setUp() throws Exception {
-		HttpServiceProxyFactory proxyFactory = new HttpServiceProxyFactory(this.client);
-		proxyFactory.addCustomArgumentResolver(this.argumentResolver);
+		HttpServiceProxyFactory proxyFactory = HttpServiceProxyFactory.builder(this.client)
+				.customArgumentResolver(this.argumentResolver)
+				.build();
 		proxyFactory.afterPropertiesSet();
 
 		this.service = proxyFactory.createClient(Service.class);

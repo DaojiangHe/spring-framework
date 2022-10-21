@@ -16,18 +16,14 @@
 
 package org.springframework.aot.hint;
 
-import java.beans.BeanInfo;
-import java.beans.IntrospectionException;
-import java.beans.Introspector;
-import java.beans.PropertyDescriptor;
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import kotlin.jvm.JvmClassMappingKt;
+import kotlin.reflect.KClass;
 
 import org.springframework.core.KotlinDetector;
 import org.springframework.core.MethodParameter;
@@ -46,8 +42,6 @@ import org.springframework.util.ClassUtils;
  * @since 6.0
  */
 public class BindingReflectionHintsRegistrar {
-
-	private static final Log logger = LogFactory.getLog(BindingReflectionHintsRegistrar.class);
 
 	private static final String KOTLIN_COMPANION_SUFFIX = "$Companion";
 
@@ -92,22 +86,20 @@ public class BindingReflectionHintsRegistrar {
 						typeHint.withMembers(
 								MemberCategory.DECLARED_FIELDS,
 								MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
-						try {
-							BeanInfo beanInfo = Introspector.getBeanInfo(clazz);
-							PropertyDescriptor[] propertyDescriptors = beanInfo.getPropertyDescriptors();
-							for (PropertyDescriptor propertyDescriptor : propertyDescriptors) {
-								registerPropertyHints(hints, seen, propertyDescriptor.getWriteMethod(), 0);
-								registerPropertyHints(hints, seen, propertyDescriptor.getReadMethod(), -1);
+						for (Method method : clazz.getMethods()) {
+							String methodName = method.getName();
+							if (methodName.startsWith("set") && method.getParameterCount() == 1) {
+								registerPropertyHints(hints, seen, method, 0);
 							}
-						}
-						catch (IntrospectionException ex) {
-							if (logger.isDebugEnabled()) {
-								logger.debug("Ignoring referenced type [" + clazz.getName() + "]: " + ex.getMessage());
+							else if ((methodName.startsWith("get") && method.getParameterCount() == 0 && method.getReturnType() != Void.TYPE) ||
+									(methodName.startsWith("is") && method.getParameterCount() == 0 && method.getReturnType() == boolean.class)) {
+								registerPropertyHints(hints, seen, method, -1);
 							}
 						}
 					}
 				}
 				if (KotlinDetector.isKotlinType(clazz)) {
+					KotlinDelegate.registerComponentHints(hints, clazz);
 					registerKotlinSerializationHints(hints, clazz);
 				}
 			});
@@ -125,8 +117,8 @@ public class BindingReflectionHintsRegistrar {
 	}
 
 	private void registerPropertyHints(ReflectionHints hints, Set<Type> seen, @Nullable Method method, int parameterIndex) {
-		if (method != null && method.getDeclaringClass() != Object.class
-				&& method.getDeclaringClass() != Enum.class) {
+		if (method != null && method.getDeclaringClass() != Object.class &&
+				method.getDeclaringClass() != Enum.class) {
 			hints.registerMethod(method, ExecutableMode.INVOKE);
 			MethodParameter methodParameter = MethodParameter.forExecutable(method, parameterIndex);
 			Type methodParameterType = methodParameter.getGenericParameterType();
@@ -151,6 +143,24 @@ public class BindingReflectionHintsRegistrar {
 			types.add(clazz);
 			for (ResolvableType genericResolvableType : resolvableType.getGenerics()) {
 				collectReferencedTypes(types, genericResolvableType);
+			}
+		}
+	}
+
+	/**
+	 * Inner class to avoid a hard dependency on Kotlin at runtime.
+	 */
+	private static class KotlinDelegate {
+
+		public static void registerComponentHints(ReflectionHints hints, Class<?> type) {
+			KClass<?> kClass = JvmClassMappingKt.getKotlinClass(type);
+			if (kClass.isData()) {
+				for (Method method : type.getMethods()) {
+					String methodName = method.getName();
+					if (methodName.startsWith("component") || methodName.equals("copy")) {
+						hints.registerMethod(method, ExecutableMode.INVOKE);
+					}
+				}
 			}
 		}
 	}
