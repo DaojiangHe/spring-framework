@@ -16,18 +16,18 @@
 
 package org.springframework.context.annotation;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.core.io.support.PropertySourceDescriptor;
 import org.springframework.core.io.support.PropertySourceFactory;
 import org.springframework.core.io.support.PropertySourceProcessor;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Registry of {@link PropertySource} processed on configuration classes.
@@ -57,6 +57,7 @@ class PropertySourceRegistry {
 	 * @throws IOException if loading a property source failed
 	 */
 	void processPropertySource(AnnotationAttributes propertySource) throws IOException {
+		// 解析@PropertySource注解的属性
 		String name = propertySource.getString("name");
 		if (!StringUtils.hasLength(name)) {
 			name = null;
