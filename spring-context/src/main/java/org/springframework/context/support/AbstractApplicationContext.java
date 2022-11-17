@@ -518,6 +518,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			StartupStep contextRefresh = this.applicationStartup.start("spring.context.refresh");
 
 			// Prepare this context for refreshing.
+			// 1. 初始化前的预处理
 			prepareRefresh();
 
 			// Tell the subclass to refresh the internal bean factory.
@@ -525,6 +526,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
 
 			// Prepare the bean factory for use in this context.
+			// 3. BeanFactory的预处理配置
 			prepareBeanFactory(beanFactory);
 
 			try {
@@ -543,6 +545,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 				beanPostProcess.end();
 
 				// Initialize message source for this context.
+				// 初始化MessageSource
 				initMessageSource();
 
 				// Initialize event multicaster for this context.
@@ -554,12 +557,14 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 				onRefresh();
 
 				// Check for listener beans and register them.
+				// 注册监听器
 				registerListeners();
 				//到此为止，BeanFactory已创建完成
 				// Instantiate all remaining (non-lazy-init) singletons.
 				finishBeanFactoryInitialization(beanFactory);
 
 				// Last step: publish corresponding event.
+				// 完成容器的创建工作
 				finishRefresh();
 			}
 
@@ -582,6 +587,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			finally {
 				// Reset common introspection caches in Spring's core, since we
 				// might not ever need metadata for singleton beans anymore...
+				// 重置Spring内核中的常见内省缓存
 				resetCommonCaches();
 				contextRefresh.end();
 			}
@@ -845,18 +851,21 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	 */
 	protected void registerListeners() {
 		// Register statically specified listeners first.
+		// 注册所有已经被创建出来的ApplicationListener，绑定到ApplicationEventMulticaster中
 		for (ApplicationListener<?> listener : getApplicationListeners()) {
 			getApplicationEventMulticaster().addApplicationListener(listener);
 		}
 
 		// Do not initialize FactoryBeans here: We need to leave all regular beans
 		// uninitialized to let post-processors apply to them!
+		// 此处不会实例化ApplicationListener，而是只绑定name
 		String[] listenerBeanNames = getBeanNamesForType(ApplicationListener.class, true, false);
 		for (String listenerBeanName : listenerBeanNames) {
 			getApplicationEventMulticaster().addApplicationListenerBean(listenerBeanName);
 		}
 
 		// Publish early application events now that we finally have a multicaster...
+		// 广播早期事件（后续再解释）
 		Set<ApplicationEvent> earlyEventsToProcess = this.earlyApplicationEvents;
 		this.earlyApplicationEvents = null;
 		if (!CollectionUtils.isEmpty(earlyEventsToProcess)) {
@@ -910,15 +919,19 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	@SuppressWarnings("deprecation")
 	protected void finishRefresh() {
 		// Clear context-level resource caches (such as ASM metadata from scanning).
+		// 清除上下文级别的资源缓存
 		clearResourceCaches();
 
 		// Initialize lifecycle processor for this context.
+		// 为当前ApplicationContext初始化一个生命周期处理器
 		initLifecycleProcessor();
 
 		// Propagate refresh to lifecycle processor first.
+		// 将refresh的动作传播到生命周期处理器
 		getLifecycleProcessor().onRefresh();
 
 		// Publish the final event.
+		// 广播事件
 		publishEvent(new ContextRefreshedEvent(this));
 	}
 
@@ -1038,9 +1051,11 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			destroyBeans();
 
 			// Close the state of this context itself.
+			// 关闭BeanFactory
 			closeBeanFactory();
 
 			// Let subclasses do some final clean-up if they wish...
+			// 给子类用的，然而子类没一个重写的
 			onClose();
 
 			// Reset local application listeners to pre-refresh state.
