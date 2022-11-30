@@ -133,9 +133,8 @@ class ConfigurationClassParser {
 		this.problemReporter = problemReporter;
 		this.environment = environment;
 		this.resourceLoader = resourceLoader;
-		this.propertySourceRegistry = (this.environment instanceof ConfigurableEnvironment ce
-				? new PropertySourceRegistry(new PropertySourceProcessor(ce, this.resourceLoader))
-				: null);
+		this.propertySourceRegistry = (this.environment instanceof ConfigurableEnvironment ce ?
+				new PropertySourceRegistry(new PropertySourceProcessor(ce, this.resourceLoader)) : null);
 		this.registry = registry;
 		this.componentScanParser = new ComponentScanAnnotationParser(
 				environment, resourceLoader, componentScanBeanNameGenerator, registry);

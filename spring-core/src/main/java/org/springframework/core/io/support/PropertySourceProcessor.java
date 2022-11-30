@@ -76,9 +76,8 @@ public class PropertySourceProcessor {
 		List<String> locations = descriptor.locations();
 		Assert.isTrue(locations.size() > 0, "At least one @PropertySource(value) location is required");
 		boolean ignoreResourceNotFound = descriptor.ignoreResourceNotFound();
-		PropertySourceFactory factory = (descriptor.propertySourceFactory() != null
-				? instantiateClass(descriptor.propertySourceFactory())
-				: DEFAULT_PROPERTY_SOURCE_FACTORY);
+		PropertySourceFactory factory = (descriptor.propertySourceFactory() != null ?
+				instantiateClass(descriptor.propertySourceFactory()) : DEFAULT_PROPERTY_SOURCE_FACTORY);
 
 		for (String location : locations) {
 			// 处理路径，加载资源文件，并添加进Environment中
@@ -109,14 +108,14 @@ public class PropertySourceProcessor {
 			// We've already added a version, we need to extend it
 			org.springframework.core.env.PropertySource<?> existing = propertySources.get(name);
 			if (existing != null) {
-				PropertySource<?> newSource = (propertySource instanceof ResourcePropertySource ?
-						((ResourcePropertySource) propertySource).withResourceName() : propertySource);
-				if (existing instanceof CompositePropertySource) {
-					((CompositePropertySource) existing).addFirstPropertySource(newSource);
+				PropertySource<?> newSource = (propertySource instanceof ResourcePropertySource rps ?
+						rps.withResourceName() : propertySource);
+				if (existing instanceof CompositePropertySource cps) {
+					cps.addFirstPropertySource(newSource);
 				}
 				else {
-					if (existing instanceof ResourcePropertySource) {
-						existing = ((ResourcePropertySource) existing).withResourceName();
+					if (existing instanceof ResourcePropertySource rps) {
+						existing = rps.withResourceName();
 					}
 					CompositePropertySource composite = new CompositePropertySource(name);
 					composite.addPropertySource(newSource);

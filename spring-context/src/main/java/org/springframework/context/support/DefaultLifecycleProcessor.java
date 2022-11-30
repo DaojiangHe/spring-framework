@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,22 @@
 
 package org.springframework.context.support;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.BeanFactoryUtils;
@@ -29,10 +43,6 @@ import org.springframework.context.Phased;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
-
-import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Default implementation of the {@link LifecycleProcessor} strategy.
@@ -64,11 +74,11 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 
 	@Override
 	public void setBeanFactory(BeanFactory beanFactory) {
-		if (!(beanFactory instanceof ConfigurableListableBeanFactory)) {
+		if (!(beanFactory instanceof ConfigurableListableBeanFactory clbf)) {
 			throw new IllegalArgumentException(
 					"DefaultLifecycleProcessor requires a ConfigurableListableBeanFactory: " + beanFactory);
 		}
-		this.beanFactory = (ConfigurableListableBeanFactory) beanFactory;
+		this.beanFactory = clbf;
 	}
 
 	private ConfigurableListableBeanFactory getBeanFactory() {
@@ -134,7 +144,7 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 
 		lifecycleBeans.forEach((beanName, bean) -> {
 			// 注意此处，如果autoStartupOnly为true，则不会执行
-			if (!autoStartupOnly || (bean instanceof SmartLifecycle && ((SmartLifecycle) bean).isAutoStartup())) {
+			if (!autoStartupOnly || (bean instanceof SmartLifecycle smartLifecycle && smartLifecycle.isAutoStartup())) {
 				// 此处的phase可类比Order
 				int phase = getPhase(bean);
 				phases.computeIfAbsent(
@@ -164,7 +174,7 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 				doStart(lifecycleBeans, dependency, autoStartupOnly);
 			}
 			if (!bean.isRunning() &&
-					(!autoStartupOnly || !(bean instanceof SmartLifecycle) || ((SmartLifecycle) bean).isAutoStartup())) {
+					(!autoStartupOnly || !(bean instanceof SmartLifecycle smartLifecycle) || smartLifecycle.isAutoStartup())) {
 				if (logger.isTraceEnabled()) {
 					logger.trace("Starting bean '" + beanName + "' of type [" + bean.getClass().getName() + "]");
 				}
@@ -219,13 +229,13 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 			}
 			try {
 				if (bean.isRunning()) {
-					if (bean instanceof SmartLifecycle) {
+					if (bean instanceof SmartLifecycle smartLifecycle) {
 						if (logger.isTraceEnabled()) {
 							logger.trace("Asking bean '" + beanName + "' of type [" +
 									bean.getClass().getName() + "] to stop");
 						}
 						countDownBeanNames.add(beanName);
-						((SmartLifecycle) bean).stop(() -> {
+						smartLifecycle.stop(() -> {
 							latch.countDown();
 							countDownBeanNames.remove(beanName);
 							if (logger.isDebugEnabled()) {
@@ -277,8 +287,8 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 					(!isFactoryBean || matchesBeanType(Lifecycle.class, beanNameToCheck, beanFactory))) ||
 					matchesBeanType(SmartLifecycle.class, beanNameToCheck, beanFactory)) {
 				Object bean = beanFactory.getBean(beanNameToCheck);
-				if (bean != this && bean instanceof Lifecycle) {
-					beans.put(beanNameToRegister, (Lifecycle) bean);
+				if (bean != this && bean instanceof Lifecycle lifecycle) {
+					beans.put(beanNameToRegister, lifecycle);
 				}
 			}
 		}
@@ -300,7 +310,7 @@ public class DefaultLifecycleProcessor implements LifecycleProcessor, BeanFactor
 	 * @see SmartLifecycle
 	 */
 	protected int getPhase(Lifecycle bean) {
-		return (bean instanceof Phased ? ((Phased) bean).getPhase() : 0);
+		return (bean instanceof Phased phased ? phased.getPhase() : 0);
 	}
 
 

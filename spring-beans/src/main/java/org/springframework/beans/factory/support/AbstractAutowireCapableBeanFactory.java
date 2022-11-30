@@ -16,32 +16,6 @@
 
 package org.springframework.beans.factory.support;
 
-import org.apache.commons.logging.Log;
-import org.springframework.beans.BeanUtils;
-import org.springframework.beans.BeanWrapper;
-import org.springframework.beans.BeanWrapperImpl;
-import org.springframework.beans.BeansException;
-import org.springframework.beans.MutablePropertyValues;
-import org.springframework.beans.PropertyAccessorUtils;
-import org.springframework.beans.PropertyValue;
-import org.springframework.beans.PropertyValues;
-import org.springframework.beans.TypeConverter;
-import org.springframework.beans.factory.*;
-import org.springframework.beans.factory.config.*;
-import org.springframework.core.DefaultParameterNameDiscoverer;
-import org.springframework.core.MethodParameter;
-import org.springframework.core.NamedThreadLocal;
-import org.springframework.core.ParameterNameDiscoverer;
-import org.springframework.core.PriorityOrdered;
-import org.springframework.core.ResolvableType;
-import org.springframework.lang.Nullable;
-import org.springframework.util.ClassUtils;
-import org.springframework.util.ObjectUtils;
-import org.springframework.util.ReflectionUtils;
-import org.springframework.util.ReflectionUtils.MethodCallback;
-import org.springframework.util.StringUtils;
-import org.springframework.util.function.ThrowingSupplier;
-
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -58,6 +32,54 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
+
+import org.apache.commons.logging.Log;
+
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.MutablePropertyValues;
+import org.springframework.beans.PropertyAccessorUtils;
+import org.springframework.beans.PropertyValue;
+import org.springframework.beans.PropertyValues;
+import org.springframework.beans.TypeConverter;
+import org.springframework.beans.factory.Aware;
+import org.springframework.beans.factory.BeanClassLoaderAware;
+import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.beans.factory.BeanCurrentlyInCreationException;
+import org.springframework.beans.factory.BeanDefinitionStoreException;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.BeanFactoryAware;
+import org.springframework.beans.factory.BeanNameAware;
+import org.springframework.beans.factory.FactoryBean;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.InjectionPoint;
+import org.springframework.beans.factory.UnsatisfiedDependencyException;
+import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
+import org.springframework.beans.factory.config.AutowiredPropertyMarker;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.config.ConstructorArgumentValues;
+import org.springframework.beans.factory.config.DependencyDescriptor;
+import org.springframework.beans.factory.config.InstantiationAwareBeanPostProcessor;
+import org.springframework.beans.factory.config.SmartInstantiationAwareBeanPostProcessor;
+import org.springframework.beans.factory.config.TypedStringValue;
+import org.springframework.core.DefaultParameterNameDiscoverer;
+import org.springframework.core.MethodParameter;
+import org.springframework.core.NamedThreadLocal;
+import org.springframework.core.ParameterNameDiscoverer;
+import org.springframework.core.PriorityOrdered;
+import org.springframework.core.ResolvableType;
+import org.springframework.lang.Nullable;
+import org.springframework.util.ClassUtils;
+import org.springframework.util.ObjectUtils;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.ReflectionUtils.MethodCallback;
+import org.springframework.util.StringUtils;
+import org.springframework.util.function.ThrowingSupplier;
 
 /**
  * Abstract bean factory superclass that implements default bean creation,
@@ -584,8 +606,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			exposedObject = initializeBean(beanName, exposedObject, mbd);
 		}
 		catch (Throwable ex) {
-			if (ex instanceof BeanCreationException && beanName.equals(((BeanCreationException) ex).getBeanName())) {
-				throw (BeanCreationException) ex;
+			if (ex instanceof BeanCreationException bce && beanName.equals(bce.getBeanName())) {
+				throw bce;
 			}
 			else {
 				throw new BeanCreationException(mbd.getResourceDescription(), beanName, ex.getMessage(), ex);
@@ -848,9 +870,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 				// declaration without instantiating the containing bean at all.
 				BeanDefinition factoryBeanDefinition = getBeanDefinition(factoryBeanName);
 				Class<?> factoryBeanClass;
-				if (factoryBeanDefinition instanceof AbstractBeanDefinition &&
-						((AbstractBeanDefinition) factoryBeanDefinition).hasBeanClass()) {
-					factoryBeanClass = ((AbstractBeanDefinition) factoryBeanDefinition).getBeanClass();
+				if (factoryBeanDefinition instanceof AbstractBeanDefinition abstractBeanDefinition &&
+						abstractBeanDefinition.hasBeanClass()) {
+					factoryBeanClass = abstractBeanDefinition.getBeanClass();
 				}
 				else {
 					RootBeanDefinition fbmbd = getMergedBeanDefinition(factoryBeanName, factoryBeanDefinition);
@@ -961,8 +983,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 				return (FactoryBean<?>) bw.getWrappedInstance();
 			}
 			Object beanInstance = getSingleton(beanName, false);
-			if (beanInstance instanceof FactoryBean) {
-				return (FactoryBean<?>) beanInstance;
+			if (beanInstance instanceof FactoryBean<?> factoryBean) {
+				return factoryBean;
 			}
 			if (isSingletonCurrentlyInCreation(beanName) ||
 					(mbd.getFactoryBeanName() != null && isSingletonCurrentlyInCreation(mbd.getFactoryBeanName()))) {
@@ -1388,11 +1410,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 			pvs = newPvs;
 		}
-		// 回调InstantiationAwareBeanPostProcessor
-		boolean hasInstAwareBpps = hasInstantiationAwareBeanPostProcessors();
-		boolean needsDepCheck = (mbd.getDependencyCheck() != AbstractBeanDefinition.DEPENDENCY_CHECK_NONE);
-
-		if (hasInstAwareBpps) {
+		if (hasInstantiationAwareBeanPostProcessors()) {
 			if (pvs == null) {
 				pvs = mbd.getPropertyValues();
 			}
@@ -1405,6 +1423,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 				pvs = pvsToUse;
 			}
 		}
+
+		boolean needsDepCheck = (mbd.getDependencyCheck() != AbstractBeanDefinition.DEPENDENCY_CHECK_NONE);
 		if (needsDepCheck) {
 			PropertyDescriptor[] filteredPds = filterPropertyDescriptorsForDependencyCheck(bw, mbd.allowCaching);
 			checkDependencies(beanName, mbd, filteredPds, pvs);
@@ -1688,8 +1708,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 					deepCopy.add(pv);
 				}
 				// 如果String类型转为其他类型（除了集合或数组），则认为它也不需要再解析了
-				else if (convertible && originalValue instanceof TypedStringValue &&
-						!((TypedStringValue) originalValue).isDynamic() &&
+				else if (convertible && originalValue instanceof TypedStringValue typedStringValue &&
+						!typedStringValue.isDynamic() &&
 						!(convertedValue instanceof Collection || ObjectUtils.isArray(convertedValue))) {
 					pv.setConvertedValue(convertedValue);
 					deepCopy.add(pv);
@@ -1722,8 +1742,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	private Object convertForProperty(
 			@Nullable Object value, String propertyName, BeanWrapper bw, TypeConverter converter) {
 
-		if (converter instanceof BeanWrapperImpl) {
-			return ((BeanWrapperImpl) converter).convertForProperty(value, propertyName);
+		if (converter instanceof BeanWrapperImpl beanWrapper) {
+			return beanWrapper.convertForProperty(value, propertyName);
 		}
 		else {
 			PropertyDescriptor pd = bw.getPropertyDescriptor(propertyName);
@@ -1755,7 +1775,6 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		invokeAwareMethods(beanName, bean);
 
 		Object wrappedBean = bean;
-		// 执行BeanPostProcessor的前置回调
 		if (mbd == null || !mbd.isSynthetic()) {
 			wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
 		}
@@ -1779,19 +1798,18 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	private void invokeAwareMethods(String beanName, Object bean) {
 		if (bean instanceof Aware) {
 			// 如果bean实现了BeanNameAware，则强转后调用setBeanName方法注入bean的名称
-			if (bean instanceof BeanNameAware) {
-				((BeanNameAware) bean).setBeanName(beanName);
+			if (bean instanceof BeanNameAware beanNameAware) {
+				beanNameAware.setBeanName(beanName);
 			}
 			// 如果bean实现了BeanClassLoaderAware，则强转后调用setBeanClassLoader方法注入当前的ClassLoader
-			if (bean instanceof BeanClassLoaderAware) {
+			if (bean instanceof BeanClassLoaderAware beanClassLoaderAware) {
 				ClassLoader bcl = getBeanClassLoader();
 				if (bcl != null) {
-					((BeanClassLoaderAware) bean).setBeanClassLoader(bcl);
+					beanClassLoaderAware.setBeanClassLoader(bcl);
 				}
 			}
-			if (bean instanceof BeanFactoryAware) {
-				// 如果bean实现了BeanFactoryAware，则强转后调用setBeanFactory方法注入BeanFactory
-				((BeanFactoryAware) bean).setBeanFactory(AbstractAutowireCapableBeanFactory.this);
+			if (bean instanceof BeanFactoryAware beanFactoryAware) {
+				beanFactoryAware.setBeanFactory(AbstractAutowireCapableBeanFactory.this);
 			}
 		}
 	}
@@ -1816,7 +1834,6 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			if (logger.isTraceEnabled()) {
 				logger.trace("Invoking afterPropertiesSet() on bean with name '" + beanName + "'");
 			}
-			// 回调InitializingBean的afterPropertiesSet方法
 			((InitializingBean) bean).afterPropertiesSet();
 		}
 
@@ -1827,7 +1844,6 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 					if (StringUtils.hasLength(initMethodName) &&
 							!(isInitializingBean && "afterPropertiesSet".equals(initMethodName)) &&
 							!mbd.hasAnyExternallyManagedInitMethod(initMethodName)) {
-						// 回调init-method方法（同样是反射调用）
 						invokeCustomInitMethod(beanName, bean, mbd, initMethodName);
 					}
 				}
