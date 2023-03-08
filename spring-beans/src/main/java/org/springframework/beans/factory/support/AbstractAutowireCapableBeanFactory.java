@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,8 +292,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	@Override
 	@SuppressWarnings("unchecked")
 	public <T> T createBean(Class<T> beanClass) throws BeansException {
-		// Use prototype bean definition, to avoid registering bean as dependent bean.
-		RootBeanDefinition bd = new RootBeanDefinition(beanClass);
+		// Use non-singleton bean definition, to avoid registering bean as dependent bean.
+		RootBeanDefinition bd = new CreateFromClassBeanDefinition(beanClass);
 		bd.setScope(SCOPE_PROTOTYPE);
 		bd.allowCaching = ClassUtils.isCacheSafe(beanClass, getBeanClassLoader());
 		return (T) createBean(beanClass.getName(), bd, null);
@@ -1222,8 +1222,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			if (supplier instanceof InstanceSupplier<?> instanceSupplier) {
 				return instanceSupplier.get(RegisteredBean.of((ConfigurableListableBeanFactory) this, beanName));
 			}
-			if (supplier instanceof ThrowingSupplier<?> throwableSupplier) {
-				return throwableSupplier.getWithException();
+			if (supplier instanceof ThrowingSupplier<?> throwingSupplier) {
+				return throwingSupplier.getWithException();
 			}
 			return supplier.get();
 		}
@@ -1357,6 +1357,17 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 			else {
 				// Skip property population phase for null instance.
+				return;
+			}
+		}
+
+		if (bw.getWrappedClass().isRecord()) {
+			if (mbd.hasPropertyValues()) {
+				throw new BeanCreationException(
+						mbd.getResourceDescription(), beanName, "Cannot apply property values to a record");
+			}
+			else {
+				// Skip property population phase for records since they are immutable.
 				return;
 			}
 		}
@@ -1620,8 +1631,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		MutablePropertyValues mpvs = null;
 		List<PropertyValue> original;
 
-		if (pvs instanceof MutablePropertyValues) {
-			mpvs = (MutablePropertyValues) pvs;
+		if (pvs instanceof MutablePropertyValues _mpvs) {
+			mpvs = _mpvs;
 			if (mpvs.isConverted()) {
 				// Shortcut: use the pre-converted values as-is.
 				try {
@@ -1917,6 +1928,36 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 
 	/**
+	 * {@link RootBeanDefinition} subclass for {@code #createBean} calls with
+	 * flexible selection of a Kotlin primary / single public / single non-public
+	 * constructor candidate in addition to the default constructor.
+	 * @see BeanUtils#getResolvableConstructor(Class)
+	 */
+	@SuppressWarnings("serial")
+	private static class CreateFromClassBeanDefinition extends RootBeanDefinition {
+
+		public CreateFromClassBeanDefinition(Class<?> beanClass) {
+			super(beanClass);
+		}
+
+		public CreateFromClassBeanDefinition(CreateFromClassBeanDefinition original) {
+			super(original);
+		}
+
+		@Override
+		@Nullable
+		public Constructor<?>[] getPreferredConstructors() {
+			return ConstructorResolver.determinePreferredConstructors(getBeanClass());
+		}
+
+		@Override
+		public RootBeanDefinition cloneBeanDefinition() {
+			return new CreateFromClassBeanDefinition(this);
+		}
+	}
+
+
+	/**
 	 * Special DependencyDescriptor variant for Spring's good old autowire="byType" mode.
 	 * Always optional; never considering the parameter name for choosing a primary candidate.
 	 */
@@ -1948,7 +1989,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		@Override
-		public void doWith(Method method) throws IllegalArgumentException, IllegalAccessException {
+		public void doWith(Method method) throws IllegalArgumentException {
 			if (isFactoryBeanMethod(method)) {
 				ResolvableType returnType = ResolvableType.forMethodReturnType(method);
 				ResolvableType candidate = returnType.as(FactoryBean.class).getGeneric();
